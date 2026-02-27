@@ -510,8 +510,8 @@
         function App() {
             const [companyName, setCompanyName] = useState('');
             const [keyword, setKeyword] = useState('');
-            const [centerLat, setCenterLat] = useState('37.0902');
-            const [centerLng, setCenterLng] = useState('-95.7129');
+            const [centerLat, setCenterLat] = useState('');
+            const [centerLng, setCenterLng] = useState('');
             const [gridSize, setGridSize] = useState(7);
             const [spacing, setSpacing] = useState(1000);
             const [gridPoints, setGridPoints] = useState([]);
@@ -528,7 +528,11 @@
             // Initialize map
             useEffect(() => {
                 if (!mapInstanceRef.current) {
-                    mapInstanceRef.current = L.map('map').setView([parseFloat(centerLat), parseFloat(centerLng)], 12);
+                    // Default to center of US if no coordinates
+                    const defaultLat = 37.0902;
+                    const defaultLng = -95.7129;
+                    
+                    mapInstanceRef.current = L.map('map').setView([defaultLat, defaultLng], 4);
                     
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         attribution: '© OpenStreetMap contributors'
@@ -591,17 +595,26 @@
                     return;
                 }
 
+                if (!centerLat || !centerLng) {
+                    alert('Please enter a location using Google Maps URL, address search, or manual coordinates');
+                    return;
+                }
+
+                // Validate coordinates
+                const lat = parseFloat(centerLat);
+                const lng = parseFloat(centerLng);
+                
+                if (isNaN(lat) || isNaN(lng)) {
+                    alert('Invalid coordinates. Please enter a valid location.');
+                    return;
+                }
+
                 setScanning(true);
                 setProgress(0);
                 setStatusMessage('Generating grid...');
 
                 // Generate grid
-                const points = generateGrid(
-                    parseFloat(centerLat),
-                    parseFloat(centerLng),
-                    gridSize,
-                    spacing
-                );
+                const points = generateGrid(lat, lng, gridSize, spacing);
 
                 setGridPoints(points);
                 setStatusMessage('Checking ranks...');
@@ -820,7 +833,9 @@
                                 </div>
                                 <div className="project-info-row">
                                     <span className="project-info-label">Location:</span>
-                                    <span className="project-info-value">{centerLat}, {centerLng}</span>
+                                    <span className="project-info-value">
+                                        {centerLat && centerLng ? `${centerLat}, ${centerLng}` : 'Not set'}
+                                    </span>
                                 </div>
                             </div>
 
@@ -848,15 +863,18 @@
                                 <label>Google Maps URL</label>
                                 <input
                                     type="text"
-                                    placeholder="Paste Google Maps link here"
+                                    placeholder="https://maps.google.com/..."
+                                    style={{
+                                        borderColor: !centerLat && !centerLng ? '#48bb78' : '#2a3441'
+                                    }}
                                     onKeyPress={(e) => {
                                         if (e.key === 'Enter') {
                                             handleGoogleMapsUrl(e.target.value);
                                         }
                                     }}
                                 />
-                                <small style={{color: '#a0a0a0', fontSize: '11px', marginTop: '5px', display: 'block'}}>
-                                    Paste Maps link and press Enter
+                                <small style={{color: '#48bb78', fontSize: '11px', marginTop: '5px', display: 'block'}}>
+                                    ⭐ Easiest: Paste Maps link & press Enter
                                 </small>
                             </div>
 
