@@ -510,8 +510,8 @@
         function App() {
             const [companyName, setCompanyName] = useState('');
             const [keyword, setKeyword] = useState('');
-            const [centerLat, setCenterLat] = useState('47.6739');
-            const [centerLng, setCenterLng] = useState('-117.3739');
+            const [centerLat, setCenterLat] = useState('37.0902');
+            const [centerLng, setCenterLng] = useState('-95.7129');
             const [gridSize, setGridSize] = useState(7);
             const [spacing, setSpacing] = useState(1000);
             const [gridPoints, setGridPoints] = useState([]);
@@ -661,6 +661,102 @@
                 setSpacing(scan.spacing);
             };
 
+            // Address search using Nominatim (free geocoding service)
+            const handleAddressSearch = async (address) => {
+                if (!address.trim()) return;
+
+                try {
+                    setStatusMessage('Searching for location...');
+                    
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`
+                    );
+                    
+                    const data = await response.json();
+                    
+                    if (data && data.length > 0) {
+                        const location = data[0];
+                        setCenterLat(parseFloat(location.lat).toFixed(4));
+                        setCenterLng(parseFloat(location.lon).toFixed(4));
+                        setStatusMessage(`Found: ${location.display_name}`);
+                        
+                        // Update map view
+                        if (mapInstanceRef.current) {
+                            mapInstanceRef.current.setView([location.lat, location.lon], 12);
+                        }
+                        
+                        setTimeout(() => setStatusMessage(''), 3000);
+                    } else {
+                        setStatusMessage('Location not found. Try a different search.');
+                        setTimeout(() => setStatusMessage(''), 3000);
+                    }
+                } catch (error) {
+                    console.error('Geocoding error:', error);
+                    setStatusMessage('Error searching location. Try entering coordinates manually.');
+                    setTimeout(() => setStatusMessage(''), 3000);
+                }
+            };
+
+            // Parse Google Maps URL to extract coordinates
+            const handleGoogleMapsUrl = (url) => {
+                if (!url.trim()) return;
+
+                try {
+                    setStatusMessage('Extracting location from Google Maps URL...');
+
+                    // Handle different Google Maps URL formats
+                    let lat, lng;
+
+                    // Format 1: @lat,lng,zoom (most common)
+                    const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                    if (atMatch) {
+                        lat = parseFloat(atMatch[1]);
+                        lng = parseFloat(atMatch[2]);
+                    }
+
+                    // Format 2: ?q=lat,lng
+                    const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                    if (!lat && qMatch) {
+                        lat = parseFloat(qMatch[1]);
+                        lng = parseFloat(qMatch[2]);
+                    }
+
+                    // Format 3: /place/name/@lat,lng
+                    const placeMatch = url.match(/\/place\/[^/]+\/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                    if (!lat && placeMatch) {
+                        lat = parseFloat(placeMatch[1]);
+                        lng = parseFloat(placeMatch[2]);
+                    }
+
+                    // Format 4: ll=lat,lng
+                    const llMatch = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                    if (!lat && llMatch) {
+                        lat = parseFloat(llMatch[1]);
+                        lng = parseFloat(llMatch[2]);
+                    }
+
+                    if (lat && lng) {
+                        setCenterLat(lat.toFixed(4));
+                        setCenterLng(lng.toFixed(4));
+                        setStatusMessage('✓ Location extracted from Google Maps!');
+
+                        // Update map view
+                        if (mapInstanceRef.current) {
+                            mapInstanceRef.current.setView([lat, lng], 15);
+                        }
+
+                        setTimeout(() => setStatusMessage(''), 3000);
+                    } else {
+                        setStatusMessage('Could not extract coordinates. Try copying the URL again.');
+                        setTimeout(() => setStatusMessage(''), 3000);
+                    }
+                } catch (error) {
+                    console.error('Google Maps URL parsing error:', error);
+                    setStatusMessage('Error parsing Google Maps URL.');
+                    setTimeout(() => setStatusMessage(''), 3000);
+                }
+            };
+
             return (
                 <div className="app-container">
                     <div className="sidebar">
@@ -671,6 +767,20 @@
 
                         <div className="section">
                             <div className="section-title">Scan Control</div>
+                            
+                            {statusMessage && !scanning && (
+                                <div style={{
+                                    padding: '10px',
+                                    background: '#1e2530',
+                                    borderRadius: '6px',
+                                    marginBottom: '15px',
+                                    fontSize: '12px',
+                                    color: '#48bb78',
+                                    textAlign: 'center'
+                                }}>
+                                    {statusMessage}
+                                </div>
+                            )}
                             
                             <div className="company-input">
                                 <label>Company/Business Name</label>
@@ -735,20 +845,61 @@
                             </div>
 
                             <div className="input-group">
-                                <label>Center Latitude</label>
+                                <label>Google Maps URL</label>
                                 <input
                                     type="text"
-                                    value={centerLat}
-                                    onChange={(e) => setCenterLat(e.target.value)}
+                                    placeholder="Paste Google Maps link here"
+                                    onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleGoogleMapsUrl(e.target.value);
+                                        }
+                                    }}
                                 />
+                                <small style={{color: '#a0a0a0', fontSize: '11px', marginTop: '5px', display: 'block'}}>
+                                    Paste Maps link and press Enter
+                                </small>
                             </div>
+
+                            <div style={{textAlign: 'center', color: '#a0a0a0', fontSize: '12px', margin: '10px 0'}}>
+                                — OR —
+                            </div>
+
                             <div className="input-group">
-                                <label>Center Longitude</label>
+                                <label>Search Location</label>
                                 <input
                                     type="text"
-                                    value={centerLng}
-                                    onChange={(e) => setCenterLng(e.target.value)}
+                                    placeholder="Enter city, address, or zip code"
+                                    onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleAddressSearch(e.target.value);
+                                        }
+                                    }}
                                 />
+                                <small style={{color: '#a0a0a0', fontSize: '11px', marginTop: '5px', display: 'block'}}>
+                                    Press Enter to search
+                                </small>
+                            </div>
+
+                            <div style={{textAlign: 'center', color: '#a0a0a0', fontSize: '12px', margin: '10px 0'}}>
+                                — OR —
+                            </div>
+
+                            <div className="input-group">
+                                <label>Manual Coordinates</label>
+                                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
+                                    <input
+                                        type="text"
+                                        value={centerLat}
+                                        onChange={(e) => setCenterLat(e.target.value)}
+                                        placeholder="Latitude"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={centerLng}
+                                        onChange={(e) => setCenterLng(e.target.value)}
+                                        placeholder="Longitude"
+                                    />
+                                </div>
                             </div>
                         </div>
 
